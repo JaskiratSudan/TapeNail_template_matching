@@ -3,6 +3,8 @@ package com.example.tapenail_yolo
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.ActivityManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.*
@@ -38,9 +40,8 @@ class MainActivity : AppCompatActivity() {
 
     // new UI
     private lateinit var patternSpinner: Spinner
-    private lateinit var latencyText: TextView
+    private lateinit var latencyText: TextView   // will show latency, mem, & CPU
     private lateinit var bitmap: Bitmap
-
 
     // --- Camera & threading ---
     private lateinit var cameraDevice: CameraDevice
@@ -52,7 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var labels: List<String>
     private val MODEL_INPUT_SIZE = 256
     private val MODEL_OUTPUT_NUM_ELEMENTS = 1344
-    private val MODEL_NUM_CLASSES = 1
+    private val MODEL_NUM_CLASSES = 5
     private val CLASS_COLORS = listOf(
         Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW,
         Color.CYAN, Color.MAGENTA, Color.GRAY
@@ -60,6 +61,11 @@ class MainActivity : AppCompatActivity() {
     private val inputBuffer = ByteBuffer
         .allocateDirect(4 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3)
         .order(ByteOrder.nativeOrder())
+
+    // --- CPU / memory tracking (using Process.getElapsedCpuTime) ---
+    private var prevAppCpuTimeMs: Long = 0L
+    private var prevRealTimeMs: Long = 0L
+    private var isFirstCpuSample = true
 
     // --- Detection state ---
     private var isUnlocked = false
@@ -368,6 +374,43 @@ class MainActivity : AppCompatActivity() {
         labels = loadLabelList()
     }
 
+    // Compute CPU usage (%) using Process.getElapsedCpuTime() and real time
+    private fun computeCpuUsage(): Float {
+        val nowAppCpu = Process.getElapsedCpuTime() // in milliseconds
+        val nowReal   = SystemClock.elapsedRealtime() // in milliseconds
+
+        if (isFirstCpuSample) {
+            prevAppCpuTimeMs = nowAppCpu
+            prevRealTimeMs   = nowReal
+            isFirstCpuSample = false
+            return 0f
+        }
+
+        val deltaApp  = nowAppCpu - prevAppCpuTimeMs
+        val deltaReal = nowReal - prevRealTimeMs
+
+        prevAppCpuTimeMs = nowAppCpu
+        prevRealTimeMs   = nowReal
+
+        return if (deltaReal > 0L) {
+            (deltaApp.toFloat() / deltaReal.toFloat()) * 100f
+        } else {
+            0f
+        }
+    }
+
+    // Compute memory usage (MB)
+    private fun computeMemoryUsage(): Float {
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memInfoArray = activityManager.getProcessMemoryInfo(intArrayOf(Process.myPid()))
+        if (memInfoArray.isNotEmpty()) {
+            // getTotalPss() returns KB of RAM used by this process
+            val totalPssKb = memInfoArray[0].totalPss
+            return totalPssKb / 1024f
+        }
+        return 0f
+    }
+
     private data class DetectionResult(
         val xmin: Float,
         val ymin: Float,
@@ -409,10 +452,15 @@ class MainActivity : AppCompatActivity() {
             }.let { processResults(it) }
         }
 
-        // update latency display
+        // update latency, memory, and CPU display
         val latency = SystemClock.elapsedRealtime() - startMs
+        val memMb   = computeMemoryUsage()
+        val cpuPct  = computeCpuUsage()
         runOnUiThread {
-            latencyText.text = "Latency: ${latency} ms"
+            latencyText.text = String.format(
+                "Latency: %d ms   Mem: %.1f MB   CPU: %.1f%%",
+                latency, memMb, cpuPct
+            )
         }
 
         return results
@@ -472,7 +520,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadModelFile(): MappedByteBuffer {
-        assets.openFd("Gtapenail2_float16.tflite").use { fd ->
+        assets.openFd("final_model.tflite").use { fd ->
             FileInputStream(fd.fileDescriptor).use { fis ->
                 return fis.channel.map(
                     FileChannel.MapMode.READ_ONLY,

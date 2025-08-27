@@ -8,9 +8,16 @@
 
 | Folder                     | Description                     |
 |---------------------------|---------------------------------|
+<<<<<<< HEAD
 | `ANDROID_APP/`            | Mobile app code |
 | `SCRIPTS/`       | Prototype code  |
 | `DOCUMENTS/` | Docs, drafts, figures, notes     |
+=======
+| `Android_App/`            | Mobile app code |
+| `Scripts/`       | Prototype code  |
+| `DOCUMENTS/` | Docs, drafts, figures, notes     |
+| `TAPENAIL_test/`          | App-yolo integration test    |
+>>>>>>> 88a153f1e47e6540576475d210697ba7e1b497e8
 | `TAPENAIL_YOLO/`          | YOLO-based pattern detection    |
 
 ---
@@ -40,7 +47,11 @@ Clone the repository and navigate into the Android app:
 
 ```bash
 git clone https://github.com/your-org/TapeNail.git
+<<<<<<< HEAD
 cd TapeNail/ANDROID_APP
+=======
+cd TapeNail/Android_App
+>>>>>>> 88a153f1e47e6540576475d210697ba7e1b497e8
 
 
 
